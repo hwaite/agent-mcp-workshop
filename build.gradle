@@ -208,6 +208,30 @@ check {
     // Coverage is a property of the finished server on `complete`, not of a chapter in progress.
 }
 
+// Prints a summary once the whole run finishes. Gradle 10 removes the
+// afterSuite(Closure) shorthand both test tasks used for this, and its
+// replacement, addTestListener, wants all four TestListener callbacks, so
+// this supplies the three no-ops and hands on only the root suite's result.
+class RootSuiteListener implements TestListener {
+    private final Closure summary
+
+    RootSuiteListener(Closure summary) {
+        this.summary = summary
+    }
+
+    void beforeSuite(TestDescriptor suite) {}
+
+    void afterSuite(TestDescriptor suite, TestResult result) {
+        if (!suite.parent) {
+            summary(result)
+        }
+    }
+
+    void beforeTest(TestDescriptor test) {}
+
+    void afterTest(TestDescriptor test, TestResult result) {}
+}
+
 test {
     useJUnitPlatform {
         includeTags 'chapter01'
@@ -217,18 +241,16 @@ test {
         events "passed", "skipped", "failed", "standardOut", "standardError"
         showStandardStreams = true
         exceptionFormat = 'full'
-
-        // Show reasons for skipped tests
-        afterSuite { desc, result ->
-            if (!desc.parent) {
-                println "\nTest result: ${result.resultType}"
-                println "Test summary: ${result.testCount} tests, " +
-                        "${result.successfulTestCount} succeeded, " +
-                        "${result.failedTestCount} failed, " +
-                        "${result.skippedTestCount} skipped "
-            }
-        }
     }
+
+    // Show reasons for skipped tests
+    addTestListener(new RootSuiteListener({ result ->
+        println "\nTest result: ${result.resultType}"
+        println "Test summary: ${result.testCount} tests, " +
+                "${result.successfulTestCount} succeeded, " +
+                "${result.failedTestCount} failed, " +
+                "${result.skippedTestCount} skipped "
+    }))
 }
 
 // The self-check a student runs while working through a chapter:
@@ -274,18 +296,16 @@ tasks.register('chapterTest', Test) {
     testLogging {
         events 'passed', 'failed', 'skipped'
         exceptionFormat = 'full'
-
-        afterSuite { desc, result ->
-            if (!desc.parent) {
-                if (result.testCount == 0) {
-                    println "\nNo tests are tagged for chapter ${chapter}."
-                } else if (result.failedTestCount == 0) {
-                    println "\nChapter ${chapter}: all ${result.testCount} tests pass. On to the next one."
-                } else {
-                    println "\nChapter ${chapter}: ${result.failedTestCount} of ${result.testCount} " +
-                            'tests still failing.'
-                }
-            }
-        }
     }
+
+    addTestListener(new RootSuiteListener({ result ->
+        if (result.testCount == 0) {
+            println "\nNo tests are tagged for chapter ${chapter}."
+        } else if (result.failedTestCount == 0) {
+            println "\nChapter ${chapter}: all ${result.testCount} tests pass. On to the next one."
+        } else {
+            println "\nChapter ${chapter}: ${result.failedTestCount} of ${result.testCount} " +
+                    'tests still failing.'
+        }
+    }))
 }
